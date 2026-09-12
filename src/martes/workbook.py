@@ -1,12 +1,16 @@
 """Hold a whole Excel workbook as a dictionary of pandas DataFrames."""
 
-from __future__ import annotations
-
-from typing import Any
+import re
+from typing import Any, Final
 
 import pandas as pd
 
-from martes.accessors import ExcelCoordAccessor
+from martes.accessors import ExcelCoordAccessor, xl
+
+QUOTED_REFERENCE: Final[re.Pattern[str]] = re.compile(
+    r"^'((?:[^']|'')*)'(?:!(?P<coordinate>.*))?$"
+)
+"""Matches an Excel reference whose sheet name is quoted."""
 
 
 class PandasWorkbook:
@@ -75,16 +79,86 @@ class PandasWorkbook:
 
     def __getitem__(self, key: str) -> Any:
 
-        if len(key.split('!', 1)) == 2:
-            sheet_name, coordinate = key.split('!', 1)
-            return self.frames[sheet_name].xl[coordinate]
+        sheet_name, coordinate = self.split_reference(key)
+        frame = self.sheet(sheet_name)
 
-        return self.frames[key]
+        if coordinate is None:
+            return frame
+
+        return xl(frame)[coordinate]
 
     def __setitem__(self, key: str, value: Any) -> None:
 
-        if len(key.split('!', 1)) != 2:
+        sheet_name, coordinate = self.split_reference(key)
+
+        if coordinate is None:
             raise ValueError('Can only set value within sheet')
 
-        sheet_name, coordinate = key.split('!', 1)
-        self.frames[sheet_name].xl[coordinate] = value
+        xl(self.sheet(sheet_name))[coordinate] = value
+
+    def sheet(self, sheet_name: str) -> pd.DataFrame:
+        """Look up one sheet by name.
+
+        Parameters
+        ----------
+        sheet_name : str
+            The name of the sheet, unquoted.
+
+        Returns
+        -------
+        pandas.DataFrame
+            The sheet.
+
+        Raises
+        ------
+        KeyError
+            If the workbook has no sheet of that name.
+        """
+
+        if sheet_name not in self.frames:
+            available = ', '.join(repr(name) for name in self.sheets)
+            raise KeyError(
+                f'No sheet {sheet_name!r} in this workbook. '
+                f'Available sheets: {available}'
+            )
+
+        return self.frames[sheet_name]
+
+    @staticmethod
+    def split_reference(key: str) -> tuple[str, str | None]:
+        """Split a reference into its sheet name and its coordinate.
+
+        Excel quotes a sheet name whenever it contains a space or a
+        punctuation mark, and doubles any apostrophe inside it, so
+        ``'Bob''s Data'!A1`` is a reference to cell A1 of the sheet
+        named ``Bob's Data``. Both quoted and unquoted names are
+        accepted.
+
+        Parameters
+        ----------
+        key : str
+            A reference such as ``'Sheet1!A2'``, ``"'My Sheet'!A2"`` or
+            a bare sheet name.
+
+        Returns
+        -------
+        tuple of (str, str or None)
+            The sheet name, and the coordinate if the reference names
+            one.
+
+        Raises
+        ------
+        ValueError
+            If `key` opens a quoted sheet name but never closes it.
+        """
+
+        if not key.startswith("'"):
+            sheet_name, separator, coordinate = key.partition('!')
+            return (sheet_name, coordinate if separator else None)
+
+        match = QUOTED_REFERENCE.match(key)
+
+        if match is None:
+            raise ValueError(f'Unterminated sheet name: "{key}"')
+
+        return (match.group(1).replace("''", "'"), match.group('coordinate'))
