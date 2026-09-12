@@ -1,10 +1,10 @@
 [project]
 name = "martes"
-version = "0.1.1"
+version = "1.0.0"
 description = "Read an Excel workbook in Pandas and reference cells by coordinates"
 readme = "README.md"
 license = { file = "LICENSE" }
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 authors = [
     { name = "Patrick Linton", email = "patrickdaniellinton@gmail.com" },
 ]
@@ -16,14 +16,13 @@ keywords = [
     "openpyxl",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Natural Language :: English",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -84,7 +83,8 @@ ignore_missing_imports = true
 max-line-length = 79
 
 [tool.pylint.design]
-max-statements = 6
+# A guideline, not a gate: a tight limit pushes helpers into the API.
+max-statements = 15
 
 [tool.numpydoc_validation]
 # "all" enables every check; the rest are exclusions.

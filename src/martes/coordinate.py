@@ -1,7 +1,5 @@
 """Represent an Excel coordinate as a column letter and a row number."""
 
-from __future__ import annotations
-
 import string
 from collections.abc import Iterator
 from functools import reduce
@@ -35,7 +33,7 @@ class Coordinate(NamedTuple):
     def from_str(
             cls,
             coordinate: str,
-    ) -> Coordinate | tuple[Coordinate, Coordinate]:
+    ) -> 'Coordinate | tuple[Coordinate, Coordinate]':
         """Parse a coordinate naming either a single cell or a range.
 
         Parameters
@@ -89,7 +87,7 @@ class Coordinate(NamedTuple):
         return parts
 
     @classmethod
-    def from_cell(cls, coordinate: str) -> Coordinate:
+    def from_cell(cls, coordinate: str) -> 'Coordinate':
         """Parse a single-cell coordinate string.
 
         Parameters
