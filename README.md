@@ -2,9 +2,15 @@
 
 Read an Excel workbook in Pandas and reference cells by coordinates
 
-## Installation
+## Install
 
+```sh
+uv add git+https://github.com/pashri/martes
+```
+
+```sh
 pip install git+https://github.com/pashri/martes
+```
 
 ## Documentation
 
@@ -74,4 +80,14 @@ It's Tuesday
 
 ### Contributing
 
-You can contribute with pull requests. Make sure to run pytest and add tests to your new functionality
+You can contribute with pull requests. Add tests for your new
+functionality, and check it before opening one:
+
+```sh
+uv sync
+uv run pytest
+uv run isort --check-only src tests
+uv run mypy
+uv run pylint src tests
+uv run numpydoc lint src/martes/*.py
+```
