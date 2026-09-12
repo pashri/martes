@@ -1,7 +1,5 @@
 """Access Excel ranges on a pandas DataFrame through an ``.xl`` accessor."""
 
-from __future__ import annotations
-
 from typing import Any
 
 import pandas as pd
@@ -28,10 +26,9 @@ class ExcelCoordAccessor:
 
     def __getitem__(self, key: str) -> Any:
 
-        if key not in self:
-            self.expand(self._obj, key)
+        frame = self._obj if key in self else self.padded(self._obj, key)
 
-        return self._obj.loc[self._range(key)]
+        return frame.loc[self._range(key)]
 
     def __setitem__(self, key: str, value: Any) -> None:
 
@@ -79,6 +76,94 @@ class ExcelCoordAccessor:
                 index=lambda r: r + 1,
             )
         )
+
+    @classmethod
+    def padded(cls, frame: pd.DataFrame, to_key: str) -> pd.DataFrame:
+        """Return a copy of a frame grown to reach a coordinate.
+
+        Cells beyond the end of `frame` come back as ``NaN``, matching
+        how a blank cell inside a sheet reads. The frame passed in is
+        not modified, so reading never changes the caller's data or its
+        dtypes.
+
+        Parameters
+        ----------
+        frame : pandas.DataFrame
+            The frame to pad. Not modified.
+        to_key : str
+            The coordinate the copy must be large enough to contain.
+
+        Returns
+        -------
+        pandas.DataFrame
+            A padded copy, or an equally sized copy if no padding was
+            needed.
+        """
+
+        furthest = Coordinate.from_cell(to_key.rsplit(':', 1)[-1])
+
+        return frame.reindex(
+            index=cls.padded_index(frame, to_row=furthest.row),
+            columns=cls.padded_columns(frame, to_index=furthest.column_index),
+        )
+
+    @staticmethod
+    def padded_index(
+            frame: pd.DataFrame,
+            to_row: int | None,
+    ) -> list[Any]:
+        """List the row labels a frame needs to reach a row number.
+
+        Parameters
+        ----------
+        frame : pandas.DataFrame
+            The frame whose index is being extended.
+        to_row : int or None
+            The 1-based row number to reach. ``None`` adds no rows.
+
+        Returns
+        -------
+        list
+            The existing row labels, followed by any that are missing.
+        """
+
+        rows = list(frame.index)
+
+        if to_row is None:
+            return rows
+
+        return rows + list(range(len(rows) + 1, to_row + 1))
+
+    @staticmethod
+    def padded_columns(
+            frame: pd.DataFrame,
+            to_index: int | None,
+    ) -> list[Any]:
+        """List the column labels a frame needs to reach a column.
+
+        Parameters
+        ----------
+        frame : pandas.DataFrame
+            The frame whose columns are being extended.
+        to_index : int or None
+            The 1-based column number to reach. ``None`` adds none.
+
+        Returns
+        -------
+        list
+            The existing column labels, followed by any that are
+            missing.
+        """
+
+        columns = list(frame.columns)
+
+        if to_index is None:
+            return columns
+
+        return columns + [
+            Coordinate.get_column_letter(number)
+            for number in range(len(columns) + 1, to_index + 1)
+        ]
 
     @classmethod
     def expand(cls, frame: pd.DataFrame, to_key: str) -> None:
@@ -218,3 +303,24 @@ class ExcelCoordAccessor:
             slice(top_left.row, bottom_right.row),
             slice(top_left.column, bottom_right.column),
         )
+
+
+def xl(frame: pd.DataFrame) -> ExcelCoordAccessor:
+    """Get the Excel accessor for a frame, in a way type checkers see.
+
+    ``frame.xl`` is registered with pandas at runtime, so type checkers
+    cannot see it and report ``frame.xl()`` as an error. This function
+    is the same accessor, reached through an ordinary call.
+
+    Parameters
+    ----------
+    frame : pandas.DataFrame
+        The frame to wrap.
+
+    Returns
+    -------
+    ExcelCoordAccessor
+        The accessor for `frame`.
+    """
+
+    return ExcelCoordAccessor(frame)

@@ -2,12 +2,10 @@
 
 # pylint: disable=missing-function-docstring,redefined-outer-name
 
-from __future__ import annotations
-
 import pandas as pd
 import pytest
 
-import martes  # noqa: F401  # pylint: disable=unused-import
+from martes import ExcelCoordAccessor, xl
 
 
 @pytest.fixture
@@ -94,14 +92,43 @@ def test_expanding_fills_new_cells_with_nan(frame: pd.DataFrame) -> None:
     assert pd.isna(frame.xl['D4'])
 
 
-def test_reading_past_the_edge_expands_the_frame(
+def test_reading_past_the_edge_returns_nan(frame: pd.DataFrame) -> None:
+    assert pd.isna(frame.xl['D4'])
+
+
+def test_reading_past_the_edge_leaves_the_frame_alone(
     frame: pd.DataFrame,
 ) -> None:
-    assert pd.isna(frame.xl['D4'])
-    assert frame.shape == (4, 4)
+    # A read must not resize the caller's frame.
+    _ = frame.xl['D4']
+
+    assert frame.shape == (3, 3)
+    assert list(frame.columns) == ['A', 'B', 'C']
 
 
-def test_expanding_to_a_whole_column_does_not_raise(
+def test_reading_past_the_edge_preserves_dtypes() -> None:
+    # Padding in place used to turn int64 into float64, so a later
+    # read of an untouched cell returned 1.0 instead of 1.
+    typed = pd.DataFrame({'A': [1, 2], 'B': ['x', 'y']}, index=[1, 2])
+    before = dict(typed.dtypes)
+
+    _ = typed.xl['D4']
+
+    assert dict(typed.dtypes) == before
+    assert typed.xl['A1'] == 1
+
+
+def test_reading_a_range_past_the_edge_pads_it(
+    frame: pd.DataFrame,
+) -> None:
+    result = frame.xl['C3:D4']
+
+    assert result.shape == (2, 2)
+    assert result.values[0][0] == 9
+    assert result.isna().values.tolist()[1] == [True, True]
+
+
+def test_reading_a_whole_column_past_the_edge(
     frame: pd.DataFrame,
 ) -> None:
     # Regression: a rowless coordinate used to be compared against an
@@ -109,6 +136,7 @@ def test_expanding_to_a_whole_column_does_not_raise(
     result = frame.xl['E:E']
 
     assert result.isna().all().all()
+    assert frame.shape == (3, 3)
 
 
 def test_rename_columns_relabels_a_plain_frame() -> None:
@@ -128,10 +156,50 @@ def test_calling_the_accessor_is_rename_columns() -> None:
     )
 
 
-def test_expanding_to_a_whole_row_adds_rows_only(
-    frame: pd.DataFrame,
-) -> None:
+def test_reading_a_whole_row_past_the_edge(frame: pd.DataFrame) -> None:
     result = frame.xl['5:5']
 
     assert list(frame.columns) == ['A', 'B', 'C']
     assert result.isna().all().all()
+    assert frame.shape == (3, 3)
+
+
+def test_xl_helper_matches_the_accessor(frame: pd.DataFrame) -> None:
+    assert xl(frame)['B2'] == frame.xl['B2']
+
+
+def test_xl_helper_is_callable_for_renaming() -> None:
+    plain = pd.DataFrame([[1, 2], [3, 4]])
+
+    assert list(xl(plain)().columns) == ['A', 'B']
+
+
+def test_xl_helper_writes_through_to_the_frame(
+    frame: pd.DataFrame,
+) -> None:
+    xl(frame)['B2'] = 50
+
+    assert frame.xl['B2'] == 50
+
+
+def test_padded_does_not_touch_the_original(frame: pd.DataFrame) -> None:
+    result = ExcelCoordAccessor.padded(frame, 'F6')
+
+    assert result.shape == (6, 6)
+    assert frame.shape == (3, 3)
+
+
+def test_writing_a_whole_column_adds_columns_only(
+    frame: pd.DataFrame,
+) -> None:
+    frame.xl['E:E'] = 0
+
+    assert frame.shape == (3, 5)
+    assert frame.xl['E1'] == 0
+
+
+def test_writing_a_whole_row_adds_rows_only(frame: pd.DataFrame) -> None:
+    frame.xl['5:5'] = 0
+
+    assert frame.shape == (5, 3)
+    assert frame.xl['A5'] == 0
